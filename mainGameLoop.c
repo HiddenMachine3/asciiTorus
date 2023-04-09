@@ -8,11 +8,11 @@
 #include <string.h>
 
 #define w 100
-#define h 50
-#define circle_radius 10
-#define torus_radius 10
-#define num_circle_points 20
-#define num_torus_rings 20
+#define h 100
+#define circle_radius 15
+#define torus_radius 15
+#define num_circle_points 60
+#define num_torus_rings 60
 const int num_torus_points = (num_circle_points * num_torus_rings);
 
 char screen[w][h];
@@ -22,10 +22,10 @@ gsl_vector *toruspoints[num_torus_points];
 void start(), init(), loop(), update(), display(), cleanup();
 void delay_millis(int milli_seconds);
 
-#define frames 1000
+#define frames 2000
 
 /**** Math members ****/
-gsl_matrix *YRotationMatrix, *XRotationMatrix, *ZRotationMatrix;
+gsl_matrix *YRotationMatrix, *XRotationMatrix, *ZRotationMatrix, *worldMatrix, *identityMatrix;
 
 void update_rotation_matrix_x(gsl_matrix *rot_matrix, double angle);
 void update_rotation_matrix_y(gsl_matrix *rot_matrix, double angle);
@@ -60,9 +60,14 @@ void init()
     YRotationMatrix = gsl_matrix_alloc(3, 3);
     XRotationMatrix = gsl_matrix_alloc(3, 3);
     ZRotationMatrix = gsl_matrix_alloc(3, 3);
+    worldMatrix = gsl_matrix_alloc(3, 3);
+    identityMatrix = gsl_matrix_alloc(3, 3);
+
     gsl_matrix_set_identity(XRotationMatrix);
     gsl_matrix_set_identity(YRotationMatrix);
     gsl_matrix_set_identity(ZRotationMatrix);
+    gsl_matrix_set_identity(worldMatrix);
+    gsl_matrix_set_identity(identityMatrix);
     /*****init torus******/
 
     // make circle
@@ -110,9 +115,27 @@ void init()
     gsl_vector_free(first_ring_midpoint);
 
     // setting up spinning
-    update_rotation_matrix_x(XRotationMatrix, 2 * M_PI / 1500);
-    update_rotation_matrix_y(YRotationMatrix, 0);
-    update_rotation_matrix_z(ZRotationMatrix,  2 * M_PI / 1500);
+    update_rotation_matrix_x(XRotationMatrix, 4 * M_PI / 1500);
+    update_rotation_matrix_y(YRotationMatrix, 4 * M_PI / 1500);
+    update_rotation_matrix_z(ZRotationMatrix, 2 * M_PI / 1500);
+
+    {
+        gsl_matrix_set_identity(worldMatrix);
+        gsl_matrix *original = gsl_matrix_alloc(3, 3);
+
+        gsl_matrix_memcpy(original, worldMatrix);
+        gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0, original, XRotationMatrix, 0, worldMatrix);
+
+        gsl_matrix_memcpy(original, worldMatrix);
+        gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0, original, YRotationMatrix, 0, worldMatrix);
+
+        gsl_matrix_memcpy(original, worldMatrix);
+        gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0, original, ZRotationMatrix, 0, worldMatrix);
+
+        gsl_matrix_free(original);
+    }
+    // gsl_matrix_mul_elements(worldMatrix, YRotationMatrix);
+    // gsl_matrix_mul_elements(worldMatrix, ZRotationMatrix);
 
     //  // where we want the middle of the torus
     //  torus_mid_point = gsl_vector_alloc(3);
@@ -125,7 +148,7 @@ void loop()
     {
         update();
         display();
-        delay_millis(500);
+        // delay_millis(500);
     }
     printf("stopped");
 }
@@ -143,23 +166,7 @@ void update()
         gsl_vector_memcpy(original, toruspoints[i]); // original <-- toruspoints[i]
         gsl_blas_dgemv(CblasNoTrans,                 // no transpose
                        1.0,                          // alpha=1
-                       XRotationMatrix,              // matrix
-                       original,                     // vector
-                       0.0,                          // beta,
-                       toruspoints[i]);              // result
-
-        gsl_vector_memcpy(original, toruspoints[i]); // original <-- toruspoints[i]
-        gsl_blas_dgemv(CblasNoTrans,                 // no transpose
-                       1.0,                          // alpha=1
-                       YRotationMatrix,              // matrix
-                       original,                     // vector
-                       0.0,                          // beta,
-                       toruspoints[i]);              // result
-
-        gsl_vector_memcpy(original, toruspoints[i]); // original <-- toruspoints[i]
-        gsl_blas_dgemv(CblasNoTrans,                 // no transpose
-                       1.0,                          // alpha=1
-                       ZRotationMatrix,              // matrix
+                       worldMatrix,                  // matrix
                        original,                     // vector
                        0.0,                          // beta,
                        toruspoints[i]);              // result
@@ -203,6 +210,8 @@ void cleanup()
     gsl_matrix_free(YRotationMatrix);
     gsl_matrix_free(XRotationMatrix);
     gsl_matrix_free(ZRotationMatrix);
+    gsl_matrix_free(worldMatrix);
+    gsl_matrix_free(identityMatrix);
     // gsl_vector_free(torus_mid_point);
 }
 
