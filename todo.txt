@@ -1,0 +1,2 @@
+-multiply by projection matrix
+-lighting
